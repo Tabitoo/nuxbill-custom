@@ -54,7 +54,54 @@ The problem with windows is hard to set cronjob, better Linux
 
 ## Installation
 
-[Installation instructions](https://github.com/hotspotbilling/phpnuxbill/wiki)
+[Installation instructions](https://github.com/hotspotbilling/phpnuxbill/wiki) (manual, without Docker)
+
+### Docker Installation (recommended)
+
+This fork ships a ready-to-use Docker setup: PHP 8.2 + Apache, MySQL, and cron
+all run in containers, so `docker compose up -d` is the only step needed on a
+fresh Linux server.
+
+**Requirements:** Docker and the Docker Compose plugin installed on the server.
+
+1. Clone this repository on the target server:
+
+   ```bash
+   git clone https://github.com/Tabitoo/nuxbill-custom.git
+   cd nuxbill-custom
+   ```
+
+2. Copy the environment template and set your own credentials:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Edit `.env` and set `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD` (and `TZ` if
+   needed) to real values — don't leave the `change_me` placeholders.
+
+3. Build and start the stack:
+
+   ```bash
+   docker compose up -d
+   ```
+
+   This builds the app image (PHP 8.2, Apache, the `gd`/`pdo_mysql`/`zip`/
+   `mbstring`/`curl` extensions, and cron+supervisord running the two
+   scheduled tasks `system/cron.php` hourly and `system/cron_reminder.php`
+   daily) and a MySQL 8 container with its data persisted in the
+   `mysql_data` volume.
+
+4. Open `http://<server-ip>/install/` in a browser and complete the web
+   installer. When asked for the database host, use `mysql` (the Docker
+   Compose service name, not `localhost`) along with the credentials you set
+   in `.env`.
+
+**Note:** the app's `/var/www/html` isn't a mounted volume, so if you rebuild
+the image (`docker compose up --build`) after the initial install — e.g. to
+update the theme in `ui/ui_custom` — the generated `config.php` is lost and
+you'll need to redo the web installer step. Back up `config.php` from the
+`nuxbill` container before rebuilding if you want to skip reinstalling.
 
 ## Freeradius
 
