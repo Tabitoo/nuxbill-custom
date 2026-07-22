@@ -87,9 +87,10 @@ fresh Linux server.
    ```
 
    This builds the app image (PHP 8.2, Apache, the `gd`/`pdo_mysql`/`zip`/
-   `mbstring`/`curl` extensions, and cron+supervisord running the two
-   scheduled tasks `system/cron.php` hourly and `system/cron_reminder.php`
-   daily) and a MySQL 8 container with its data persisted in the
+   `mbstring`/`curl` extensions, and cron+supervisord running
+   `system/cron.php` every 5 minutes and `system/cron_reminder.php` daily
+   at 7 AM — matching the schedule PHPNuxBill itself recommends in
+   Settings > App) and a MySQL 8 container with its data persisted in the
    `mysql_data` volume.
 
 4. Open `http://<server-ip>/install/` in a browser and complete the web
@@ -97,11 +98,20 @@ fresh Linux server.
    Compose service name, not `localhost`) along with the credentials you set
    in `.env`.
 
-**Note:** the app's `/var/www/html` isn't a mounted volume, so if you rebuild
-the image (`docker compose up --build`) after the initial install — e.g. to
-update the theme in `ui/ui_custom` — the generated `config.php` is lost and
-you'll need to redo the web installer step. Back up `config.php` from the
-`nuxbill` container before rebuilding if you want to skip reinstalling.
+**Persistence across rebuilds:** `/var/www/html` itself isn't a mounted
+volume, so rebuilding the image (`docker compose up --build`, e.g. after
+updating the theme in `ui/ui_custom`) discards anything written directly
+into the container. Two things are carried over automatically regardless:
+
+- `config.php`, written by the installer, is synced to `./data/config.php`
+  on the host and restored on container start — you won't be asked to
+  reinstall after a rebuild.
+- `system/uploads` (voucher templates, uploaded logos, the cron heartbeat
+  file the dashboard checks) lives in the `app_uploads` named volume.
+
+The dashboard may show "Cron appear not been setup" for the first few
+minutes after a fresh `up` — that's expected until the first `system/cron.php`
+run (every 5 minutes) writes its heartbeat file.
 
 ## Freeradius
 

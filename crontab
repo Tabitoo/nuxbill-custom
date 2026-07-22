@@ -1,2 +1,2 @@
-0 * * * * www-data php /var/www/html/system/cron.php >> /var/log/cron.log 2>&1
-0 0 * * * www-data php /var/www/html/system/cron_reminder.php >> /var/log/cron.log 2>&1
+*/5 * * * * www-data php /var/www/html/system/cron.php >> /var/log/cron.log 2>&1
+0 7 * * * www-data php /var/www/html/system/cron_reminder.php >> /var/log/cron.log 2>&1

@@ -34,13 +34,15 @@ RUN chmod -R 755 /var/www/html
 # Set working directory
 WORKDIR /var/www/html
 
-# Cron jobs: system/cron.php hourly, system/cron_reminder.php daily
+# Cron jobs: system/cron.php every 5 minutes, system/cron_reminder.php daily
 COPY crontab /etc/cron.d/phpnuxbill
 RUN chmod 0644 /etc/cron.d/phpnuxbill && touch /var/log/cron.log
 
-# supervisord runs Apache and cron together as the container's single process
+# supervisord runs Apache, cron and the config.php persistence sync together
+# as the container's single process
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY config-sync.sh /config-sync.sh
+RUN chmod +x /entrypoint.sh /config-sync.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
