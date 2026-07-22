@@ -58,9 +58,9 @@ The problem with windows is hard to set cronjob, better Linux
 
 ### Docker Installation (recommended)
 
-This fork ships a ready-to-use Docker setup: PHP 8.2 + Apache, MySQL, and cron
-all run in containers, so `docker compose up -d` is the only step needed on a
-fresh Linux server.
+This fork ships a ready-to-use Docker setup: PHP 8.2 + Apache, MySQL, cron and
+a FreeRADIUS server all run in containers, so `docker compose up -d` is the
+only step needed on a fresh Linux server.
 
 **Requirements:** Docker and the Docker Compose plugin installed on the server.
 
@@ -78,7 +78,9 @@ fresh Linux server.
    ```
 
    Edit `.env` and set `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD` (and `TZ` if
-   needed) to real values — don't leave the `change_me` placeholders.
+   needed) to real values — don't leave the `change_me` placeholders. Also set
+   `RADIUS_SECRET` to a real shared secret, and `RADIUS_CLIENT_NETWORK` to
+   your Mikrotik's IP/subnet (see §5 below) if you're using FreeRADIUS.
 
 3. Build and start the stack:
 
@@ -90,13 +92,15 @@ fresh Linux server.
    `mbstring`/`curl` extensions, and cron+supervisord running
    `system/cron.php` every 5 minutes and `system/cron_reminder.php` daily
    at 7 AM — matching the schedule PHPNuxBill itself recommends in
-   Settings > App) and a MySQL 8 container with its data persisted in the
-   `mysql_data` volume.
+   Settings > App), a MySQL 8 container with its data persisted in the
+   `mysql_data` volume, and a FreeRADIUS container (see [Freeradius](#freeradius) below).
 
 4. Open `http://<server-ip>/install/` in a browser and complete the web
    installer. When asked for the database host, use `mysql` (the Docker
    Compose service name, not `localhost`) along with the credentials you set
-   in `.env`.
+   in `.env`. Tick the "Install Radius" option if you want RADIUS-backed
+   Hotspot/PPPoE from the start (see [Freeradius](#freeradius) below) — it just imports `install/radius.sql`
+   into the same database.
 
 **Persistence across rebuilds:** `/var/www/html` itself isn't a mounted
 volume, so rebuilding the image (`docker compose up --build`, e.g. after
@@ -116,6 +120,38 @@ run (every 5 minutes) writes its heartbeat file.
 ## Freeradius
 
 Support [Freeradius with Database](https://github.com/hotspotbilling/phpnuxbill/wiki/FreeRadius)
+
+### Freeradius in this Docker setup
+
+A `freeradius` service (`./freeradius/Dockerfile`, Debian + `freeradius`/
+`freeradius-mysql`) runs alongside `nuxbill` and `mysql`, reading/writing the
+same `radcheck`/`radreply`/`radgroupcheck`/`radgroupreply`/`radusergroup`/
+`radacct`/`radpostauth`/`nas` tables PHPNuxBill itself uses (schema from
+`install/phpnuxbill.sql`/`install/radius.sql`) — no separate database, no
+sync needed between the two.
+
+- **Ports:** `1812/udp` (authentication) and `1813/udp` (accounting) are
+  published to the host, same as a normal FreeRADIUS install.
+- **`.env` variables:**
+  - `RADIUS_SECRET` — the shared secret. Set it to something real, and
+    configure the exact same value on the Mikrotik's RADIUS client settings.
+  - `RADIUS_CLIENT_NETWORK` — the IP or CIDR range your Mikrotik(s) connect
+    from (e.g. `192.168.88.1` or `192.168.88.0/24`). Defaults to `0.0.0.0/0`
+    (accepts requests from anywhere) for easy local testing — **tighten this
+    to your actual router's address before going to production**, otherwise
+    anyone who knows `RADIUS_SECRET` can authenticate against your server.
+- **Enabling it in PHPNuxBill itself:** having the container running isn't
+  enough on its own — in Settings, turn on "Use Radius" (`radius_enable`),
+  and set up your router in Settings > Routers with the RADIUS option
+  pointing at this server's IP, port `1812`/`1813`, and `RADIUS_SECRET`.
+  `config.php` needs `$radius_host`/`$radius_user`/`$radius_pass`/`$radius_name`
+  set (the installer does this automatically if you tick "Install Radius" in
+  step 3 — they default to the same values as `$db_host`/etc. since it's the
+  same database).
+- **Rebuilds:** the `freeradius` container has no state of its own to lose —
+  everything it reads lives in the `mysql_data` volume — so a
+  `docker compose up --build` is safe and doesn't require reconfiguring
+  anything.
 
 ## Community Support
 

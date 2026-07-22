@@ -1,0 +1,7 @@
+
+# Added by the phpnuxbill Docker packaging - see .env RADIUS_CLIENT_NETWORK/RADIUS_SECRET.
+client mikrotik {
+	ipaddr = ${RADIUS_CLIENT_NETWORK}
+	secret = ${RADIUS_SECRET}
+	require_message_authenticator = no
+}

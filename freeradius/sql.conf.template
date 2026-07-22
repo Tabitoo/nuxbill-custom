@@ -1,0 +1,40 @@
+# -*- text -*-
+# Minimal sql module config for PHPNuxBill's RADIUS schema (install/radius.sql).
+# Table names below match that schema exactly - do not rename them.
+sql {
+	driver = "rlm_sql_mysql"
+	dialect = "mysql"
+
+	server = "${RADIUS_DB_HOST}"
+	port = ${RADIUS_DB_PORT}
+	login = "${RADIUS_DB_USER}"
+	password = "${RADIUS_DB_PASSWORD}"
+	radius_db = "${RADIUS_DB_NAME}"
+
+	acct_table1 = "radacct"
+	acct_table2 = "radacct"
+	postauth_table = "radpostauth"
+
+	authcheck_table = "radcheck"
+	groupcheck_table = "radgroupcheck"
+	authreply_table = "radreply"
+	groupreply_table = "radgroupreply"
+	usergroup_table = "radusergroup"
+	client_table = "nas"
+
+	delete_stale_sessions = yes
+	group_attribute = "SQL-Group"
+
+	pool {
+		start = ${thread[pool].start_servers}
+		min = ${thread[pool].min_spare_servers}
+		max = ${thread[pool].max_servers}
+		spare = ${thread[pool].max_spare_servers}
+		uses = 0
+		retry_delay = 30
+		lifetime = 0
+		idle_timeout = 60
+	}
+
+	$INCLUDE ${modconfdir}/${.:name}/main/${dialect}/queries.conf
+}

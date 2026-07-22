@@ -26,6 +26,24 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
 
+  freeradius:
+    container_name: freeradius
+    build: ./freeradius
+    restart: unless-stopped
+    environment:
+      RADIUS_DB_HOST: mysql
+      RADIUS_DB_PORT: "3306"
+      RADIUS_DB_USER: ${MYSQL_USER}
+      RADIUS_DB_PASSWORD: ${MYSQL_PASSWORD}
+      RADIUS_DB_NAME: ${MYSQL_DATABASE}
+      RADIUS_CLIENT_NETWORK: ${RADIUS_CLIENT_NETWORK}
+      RADIUS_SECRET: ${RADIUS_SECRET}
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    depends_on:
+      - mysql
+
 volumes:
   mysql_data:
   app_uploads:
