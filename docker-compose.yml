@@ -1,0 +1,27 @@
+services:
+  nuxbill:
+    container_name: nuxbill
+    pull_policy: always
+    build: ./
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      TZ: ${TZ}
+    depends_on:
+      - mysql
+
+  mysql:
+    container_name: mysql
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:

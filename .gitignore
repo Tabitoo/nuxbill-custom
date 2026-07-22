@@ -1,4 +1,5 @@
 config.php
+.env
 .DS_Store
 .vscode/
 ui/ui/compiled
@@ -49,7 +50,6 @@ system/devices/**
 !system/devices/MikrotikPppoeCustom.php
 !system/devices/MikrotikHotspot.php
 /.vs
-docker-compose.yml
 docs/**
 !docs/*.html
 !docs/*.md
