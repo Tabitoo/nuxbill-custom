@@ -85,8 +85,13 @@ only step needed on a fresh Linux server.
 3. Build and start the stack:
 
    ```bash
-   docker compose up -d
+   docker compose up -d --build
    ```
+
+   Use `--build` here even on a first install: if an image from a previous
+   attempt is already cached locally under the same project name, plain
+   `docker compose up -d` will silently reuse it instead of rebuilding from
+   the current source.
 
    This builds the app image (PHP 8.2, Apache, the `gd`/`pdo_mysql`/`zip`/
    `mbstring`/`curl` extensions, and cron+supervisord running
