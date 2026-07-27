@@ -1,0 +1,10 @@
+# These files are executed inside Linux containers (or consumed by cron/freeradius
+# there). Force LF checkout regardless of the cloning machine's core.autocrlf
+# setting, so Windows clones don't turn "#!/bin/sh" into "#!/bin/sh\r" and break
+# the entrypoint scripts (exec /entrypoint.sh: no such file or directory).
+*.sh text eol=lf
+Dockerfile text eol=lf
+crontab text eol=lf
+*.conf text eol=lf
+*.template text eol=lf
+supervisord.conf text eol=lf
