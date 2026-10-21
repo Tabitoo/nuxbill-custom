@@ -34,6 +34,11 @@ RUN chmod -R 755 /var/www/html
 # Set working directory
 WORKDIR /var/www/html
 
+# Treat requests forwarded with "X-Forwarded-Proto: https" (Cloudflare Tunnel,
+# reverse proxies) as HTTPS so generated asset URLs aren't mixed content
+COPY forwarded-proto.conf /etc/apache2/conf-available/forwarded-proto.conf
+RUN a2enmod setenvif && a2enconf forwarded-proto
+
 # Cron jobs: system/cron.php every 5 minutes, system/cron_reminder.php daily
 COPY crontab /etc/cron.d/phpnuxbill
 RUN chmod 0644 /etc/cron.d/phpnuxbill && touch /var/log/cron.log

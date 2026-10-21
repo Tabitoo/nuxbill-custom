@@ -118,6 +118,13 @@ into the container. Two things are carried over automatically regardless:
 - `system/uploads` (voucher templates, uploaded logos, the cron heartbeat
   file the dashboard checks) lives in the `app_uploads` named volume.
 
+**Behind HTTPS proxies / Cloudflare Tunnel:** if something in front of the
+container terminates HTTPS and forwards plain HTTP to port 80 (e.g.
+`cloudflared tunnel --url http://localhost:80`), Apache treats requests with
+`X-Forwarded-Proto: https` as HTTPS (see `forwarded-proto.conf`), so CSS/JS
+links are generated with `https://` and aren't blocked as mixed content. No
+change to `config.php` is needed.
+
 The dashboard may show "Cron appear not been setup" for the first few
 minutes after a fresh `up` — that's expected until the first `system/cron.php`
 run (every 5 minutes) writes its heartbeat file.
