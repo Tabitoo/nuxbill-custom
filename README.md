@@ -129,6 +129,137 @@ The dashboard may show "Cron appear not been setup" for the first few
 minutes after a fresh `up` — that's expected until the first `system/cron.php`
 run (every 5 minutes) writes its heartbeat file.
 
+## Connecting the Mikrotik (RouterOS API)
+
+This is the recommended way to connect a single Mikrotik to this stack.
+PHPNuxBill talks to the router over the RouterOS API (TCP `8728`) and pushes
+hotspot users / PPPoE secrets and their profiles directly into it; the router
+then authenticates clients on its own. That means **clients keep working even
+if the PHPNuxBill server is down or rebooting** — only new purchases and
+expirations wait until it's back. (With FreeRADIUS, nobody can log in while
+the server is down; it's mainly worth it with many routers. See
+[Freeradius](#freeradius).)
+
+Expirations are applied by `system/cron.php`, which already runs inside the
+`nuxbill` container (see step 3 above) — nothing extra to set up.
+
+**Docker needs no changes for this.** Outbound traffic from the `nuxbill`
+container is routed through the host, so as soon as the host itself can reach
+the Mikrotik (same LAN or through the WireGuard tunnel below), the app can too.
+No inbound ports have to be opened on the server for the API either: it's the
+server that connects to the router.
+
+> The Cloudflare Tunnel only publishes the web page. It does **not** carry the
+> API connection between the server and the Mikrotik.
+
+### 1. Network between the server and the Mikrotik
+
+Pick the case that applies.
+
+**Case A — same local network.** Nothing to configure on the server besides
+giving it a **fixed LAN IP** (e.g. a DHCP reservation), so the router can
+restrict API access to it. Use the Mikrotik's LAN IP in step 3.
+
+**Case B — different networks: WireGuard tunnel.** Don't expose port `8728`
+to the internet. Instead, create a WireGuard tunnel (built into RouterOS 7)
+and let the API listen only on it. The examples use `10.10.10.0/30`: the
+Mikrotik is `10.10.10.1`, the server is `10.10.10.2`. The Mikrotik needs a
+public IP (ideally static, or a DDNS name — RouterOS provides one for free
+under `/ip cloud`); if the ISP puts it behind CGNAT, this setup won't work
+as-is.
+
+On the **Mikrotik**:
+
+```
+/interface wireguard add name=wg-nuxbill listen-port=13231
+/ip address add address=10.10.10.1/30 interface=wg-nuxbill
+/ip firewall filter add chain=input protocol=udp dst-port=13231 action=accept place-before=0 comment="WireGuard nuxbill"
+/interface wireguard print
+```
+
+Write down the Mikrotik's `public-key` from the last command.
+
+On the **server** (Debian/Ubuntu host, not inside a container):
+
+```bash
+sudo apt install wireguard
+wg genkey | sudo tee /etc/wireguard/privatekey | wg pubkey | sudo tee /etc/wireguard/publickey
+```
+
+Create `/etc/wireguard/wg0.conf`:
+
+```ini
+[Interface]
+PrivateKey = <contents of /etc/wireguard/privatekey>
+Address = 10.10.10.2/30
+
+[Peer]
+PublicKey = <Mikrotik public-key>
+Endpoint = <Mikrotik public IP or DDNS name>:13231
+AllowedIPs = 10.10.10.1/32
+PersistentKeepalive = 25
+```
+
+Enable it so it comes up on every boot:
+
+```bash
+sudo chmod 600 /etc/wireguard/wg0.conf /etc/wireguard/privatekey
+sudo systemctl enable --now wg-quick@wg0
+```
+
+Back on the **Mikrotik**, register the server as a peer:
+
+```
+/interface wireguard peers add interface=wg-nuxbill public-key="<contents of the server's /etc/wireguard/publickey>" allowed-address=10.10.10.2/32
+```
+
+Check with `ping 10.10.10.1` from the server. The server starts the
+connection and `PersistentKeepalive` keeps it up, so the server can stay
+behind NAT with no port forwarding.
+
+### 2. API user on the Mikrotik
+
+Create a dedicated user and allow API access **only from the server**
+(`<server-ip>` is its fixed LAN IP in case A, `10.10.10.2` in case B):
+
+```
+/user group add name=nuxbill policy=read,write,api,test,policy,sensitive
+/user add name=nuxbill group=nuxbill password=<strong-password>
+/ip service set api address=<server-ip>/32 disabled=no
+```
+
+Use the plain `api` service (`8728`), not `api-ssl`: PHPNuxBill's RouterOS
+client doesn't open TLS connections. That's why the API goes through the LAN
+or the tunnel, never straight over the internet.
+
+Test that the app container can reach it (`<mikrotik-ip>` is the LAN IP in
+case A, `10.10.10.1` in case B):
+
+```bash
+docker exec nuxbill bash -c "timeout 3 bash -c '</dev/tcp/<mikrotik-ip>/8728' && echo API OK"
+```
+
+### 3. Add the router in PHPNuxBill
+
+1. Go to **Network → Routers → New Router** and fill in:
+   - **Status:** Enable
+   - **Router Name / Location:** any name (e.g. `Main`)
+   - **IP Address:** `<mikrotik-ip>:8728` (e.g. `192.168.88.1:8728`, or
+     `10.10.10.1:8728` with the tunnel)
+   - **Username:** `nuxbill`
+   - **Router Secret:** the password from step 2
+   - Leave **Test Connection** checked: PHPNuxBill logs into the router
+     before saving and shows the error if it can't.
+2. Create the speed profiles in **Internet Plan → Bandwidth**.
+3. For PPPoE, create the address pool in **Network → IP Pool** and pick that
+   router.
+4. Create the plans in **Internet Plan → Hotspot** and/or **Internet Plan →
+   PPPOE**, choosing this router in **Router Name**. PHPNuxBill creates the
+   matching hotspot user profile / PPP profile on the Mikrotik when you save.
+
+From then on, when a customer gets a plan, PHPNuxBill creates their user on
+the Mikrotik; when it expires, the cron job removes or disables it.
+
 ## Freeradius
 
 Support [Freeradius with Database](https://github.com/hotspotbilling/phpnuxbill/wiki/FreeRadius)
@@ -154,8 +285,9 @@ sync needed between the two.
     anyone who knows `RADIUS_SECRET` can authenticate against your server.
 - **Enabling it in PHPNuxBill itself:** having the container running isn't
   enough on its own — in Settings, turn on "Use Radius" (`radius_enable`),
-  and set up your router in Settings > Routers with the RADIUS option
-  pointing at this server's IP, port `1812`/`1813`, and `RADIUS_SECRET`.
+  and register your router as a NAS in **Radius → Radius NAS** (the menu
+  appears once Radius is enabled), pointing the Mikrotik at this server's IP,
+  port `1812`/`1813`, and `RADIUS_SECRET`.
   `config.php` needs `$radius_host`/`$radius_user`/`$radius_pass`/`$radius_name`
   set (the installer does this automatically if you tick "Install Radius" in
   step 3 — they default to the same values as `$db_host`/etc. since it's the
