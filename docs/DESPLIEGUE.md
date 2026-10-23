@@ -102,12 +102,14 @@ Esta guía arranca desde ahí.
 
 **Seguridad**
 
-- [ ] **Evitar que `.env` y `data/` entren a la imagen.** `.dockerignore` solo
-  excluye `.git` y `config.php`. El `Dockerfile` hace `COPY . /var/www/html`, así
-  que el `.env` del servidor (con las contraseñas de MySQL) queda dentro de la
-  imagen en `/var/www/html/.env`, y Apache lo sirve en `https://<dominio>/.env`.
-  Hay que agregar `.env` y `data/` a `.dockerignore`, reconstruir, y **cambiar
-  las contraseñas de MySQL** si la página ya estuvo publicada.
+- [x] **Evitar que `.env` y `data/` entren a la imagen.** Antes, el `.env` del
+  servidor quedaba dentro de la imagen (`COPY . /var/www/html`) y Apache lo
+  servía en `https://<dominio>/.env`. Resuelto en `.dockerignore` (excluye
+  `.env`, `.env.*` y `data/`) y en `deny-dotfiles.conf` (Apache niega cualquier
+  archivo que empiece con `.`), habilitado en el `Dockerfile`.
+  **Hace falta reconstruir la imagen** para que aplique (ver [§5](#5-actualizar-el-servidor-tras-cambios-del-repo)).
+- [ ] **Cambiar las contraseñas de MySQL**, porque el `.env` pudo haber quedado
+  expuesto mientras la página estuvo publicada (ver [§7](#7-cambiar-las-contraseñas-de-mysql)).
 - [ ] **Bloquear `/install` después de instalar.** El instalador no verifica si
   ya existe un `config.php`, y la carpeta `install/` vuelve a copiarse en cada
   build. Cualquiera podría volver a correrlo desde internet. Opciones: bloquear
@@ -392,14 +394,53 @@ No hay backups configurados todavía. Mínimo recomendado:
 
 ---
 
+## 7. Cambiar las contraseñas de MySQL
+
+Las variables `MYSQL_*` del `.env` solo se usan **la primera vez** que se crea
+el volumen `mysql_data`. Cambiarlas en el `.env` no cambia la contraseña real;
+hay que hacerlo en tres lugares: MySQL, `config.php` y `.env`.
+
+1. Primero reconstruir con el fix (§5) y comprobar que
+   `https://billing.tudominio.com/.env` ya da **403**.
+2. Cambiar las contraseñas dentro de MySQL (pide la contraseña de root **actual**):
+   ```bash
+   docker exec -it mysql mysql -u root -p
+   ```
+   ```sql
+   ALTER USER 'nuxbill'@'%' IDENTIFIED BY 'NUEVA-CLAVE-APP-AQUI';
+   ALTER USER 'root'@'%' IDENTIFIED BY 'NUEVA-CLAVE-ROOT-AQUI';
+   ALTER USER 'root'@'localhost' IDENTIFIED BY 'NUEVA-CLAVE-ROOT-AQUI';
+   EXIT;
+   ```
+   (Si `MYSQL_USER` no es `nuxbill`, usar ese nombre.)
+3. Actualizar `config.php`. **Primero parar el contenedor**: mientras corre,
+   `config-sync.sh` pisa `./data/config.php` con la copia vieja de adentro.
+   ```bash
+   docker compose stop nuxbill
+   ```
+   Editar `./data/config.php` en el host y poner la nueva clave en `$db_pass`
+   (y en `$radius_pass`, si existe).
+4. Poner las mismas claves nuevas en `.env` (`MYSQL_PASSWORD` y
+   `MYSQL_ROOT_PASSWORD`).
+5. Levantar todo de nuevo. Al arrancar, `entrypoint.sh` copia
+   `./data/config.php` adentro del contenedor:
+   ```bash
+   docker compose up -d
+   ```
+6. Entrar al admin y comprobar que todo carga. Si da error de base de datos,
+   revisar que la clave de `./data/config.php` sea la misma que la del paso 2.
+
+---
+
 ## Notas de revisión
 
 Cosas del proyecto que contradicen la guía original o que conviene revisar:
 
-1. **`.env` dentro de la imagen y accesible por web.** `.dockerignore` no excluye
-   `.env` ni `data/`, y el `Dockerfile` hace `COPY . /var/www/html`. La config de
-   Apache de la imagen solo bloquea archivos `.ht*`, así que `/.env` se sirve
-   tal cual. Es lo más urgente de la lista.
+1. **`.env` dentro de la imagen y accesible por web** (corregido en el repo el
+   2026-10-23, falta reconstruir en el servidor y cambiar las contraseñas).
+   `.dockerignore` no excluía `.env` ni `data/`, el `Dockerfile` hace
+   `COPY . /var/www/html`, y la config de Apache de la imagen solo bloqueaba
+   archivos `.ht*`, así que `/.env` se servía tal cual.
 2. **El instalador sigue accesible.** `install/` no tiene protección para cuando
    PHPNuxBill ya está instalado (solo `init.php` redirige a `/install` si falta
    `config.php`, no al revés).

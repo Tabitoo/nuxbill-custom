@@ -1,2 +1,8 @@
 .git
 config.php
+# Secrets and host-only state: never bake them into the image (the whole
+# build context is copied to the web root, so they'd be downloadable).
+.env
+.env.*
+!.env.example
+data/

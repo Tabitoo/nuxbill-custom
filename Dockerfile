@@ -40,6 +40,10 @@ WORKDIR /var/www/html
 COPY forwarded-proto.conf /etc/apache2/conf-available/forwarded-proto.conf
 RUN a2enmod setenvif && a2enconf forwarded-proto
 
+# Block hidden files like .env from being served
+COPY deny-dotfiles.conf /etc/apache2/conf-available/deny-dotfiles.conf
+RUN a2enconf deny-dotfiles
+
 # Cron jobs: system/cron.php every 5 minutes, system/cron_reminder.php daily
 COPY crontab /etc/cron.d/phpnuxbill
 RUN chmod 0644 /etc/cron.d/phpnuxbill && touch /var/log/cron.log
