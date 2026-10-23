@@ -1,5 +1,6 @@
 # Use the official PHP image with Apache
-FROM php:8.2-apache
+# Pinned to a patched release (8.2.35 fixes CVE-2026-109618/109619, "PHP2Shell").
+FROM php:8.2.35-apache-bookworm
 EXPOSE 80
 
 # Install necessary PHP extensions and system packages (cron + supervisor
