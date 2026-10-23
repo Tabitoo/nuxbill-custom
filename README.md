@@ -64,6 +64,11 @@ only step needed on a fresh Linux server.
 
 **Requirements:** Docker and the Docker Compose plugin installed on the server.
 
+> **Production checklist (Spanish):** [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md)
+> covers what's left for a full deployment: fixed domain with Cloudflare
+> Tunnel, connecting the Mikrotik via API (same network or remote), backups
+> and pending security tasks.
+
 1. Clone this repository on the target server:
 
    ```bash
