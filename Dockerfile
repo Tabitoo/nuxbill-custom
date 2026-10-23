@@ -44,6 +44,10 @@ RUN a2enmod setenvif && a2enconf forwarded-proto
 COPY deny-dotfiles.conf /etc/apache2/conf-available/deny-dotfiles.conf
 RUN a2enconf deny-dotfiles
 
+# Block the web installer once PHPNuxBill is installed
+COPY block-installer.conf /etc/apache2/conf-available/block-installer.conf
+RUN a2enconf block-installer
+
 # Cron jobs: system/cron.php every 5 minutes, system/cron_reminder.php daily
 COPY crontab /etc/cron.d/phpnuxbill
 RUN chmod 0644 /etc/cron.d/phpnuxbill && touch /var/log/cron.log

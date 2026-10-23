@@ -110,11 +110,18 @@ Esta guía arranca desde ahí.
   **Hace falta reconstruir la imagen** para que aplique (ver [§5](#5-actualizar-el-servidor-tras-cambios-del-repo)).
 - [ ] **Cambiar las contraseñas de MySQL**, porque el `.env` pudo haber quedado
   expuesto mientras la página estuvo publicada (ver [§7](#7-cambiar-las-contraseñas-de-mysql)).
-- [ ] **Bloquear `/install` después de instalar.** El instalador no verifica si
+- [x] **Bloquear `/install` después de instalar.** El instalador no verifica si
   ya existe un `config.php`, y la carpeta `install/` vuelve a copiarse en cada
-  build. Cualquiera podría volver a correrlo desde internet. Opciones: bloquear
-  `/install` en Apache cuando existe `/data/config.php`, o borrarla en el
-  `entrypoint.sh` en ese caso.
+  build. Resuelto en `block-installer.conf` (habilitado en el `Dockerfile`):
+  cuando existe `config.php`, Apache niega los `.php`/`.sql` de `install/`,
+  salvo `step5.php` (el último paso del instalador, que no toca la base ni
+  `config.php`). **Hace falta reconstruir la imagen** para que aplique.
+- [ ] **Persistir la carpeta `pages/`.** `install/step5.php` copia
+  `pages_template/` a `pages/` (páginas editables como Términos, Privacidad,
+  Anuncios). `pages/` no está en ningún volumen, así que **se pierde en cada
+  rebuild** junto con lo que se haya editado desde el admin. Hay que montarla
+  como volumen (como `system/uploads`) y que el `entrypoint.sh` la llene desde
+  `pages_template/` si está vacía.
 - [ ] **Cambiar la contraseña del admin** por defecto de PHPNuxBill
   (`admin` / `admin`) apenas termina la instalación.
 - [ ] **Migrar a PHP 8.3 antes del 31/12/2026**, cuando PHP 8.2 deja de recibir
@@ -354,7 +361,8 @@ conectado.
   (puede tardar 5 minutos después de un `up`).
 - [ ] `https://billing.tudominio.com` carga con estilos, y `/admin` también.
 - [ ] `https://billing.tudominio.com/.env` da **403/404**, no el archivo.
-- [ ] `https://billing.tudominio.com/install/` **no** muestra el instalador.
+- [ ] `https://billing.tudominio.com/install/` da **403** (no muestra el instalador).
+- [ ] `docker exec nuxbill apache2ctl -t` responde `Syntax OK`.
 - [ ] El router aparece en **Network → Routers** y un plan de prueba crea el
   usuario en el Mikrotik (`/ip hotspot user print` o `/ppp secret print`).
 - [ ] Un dispositivo sin plan, conectado al hotspot, puede abrir la página.
@@ -441,9 +449,11 @@ Cosas del proyecto que contradicen la guía original o que conviene revisar:
    `.dockerignore` no excluía `.env` ni `data/`, el `Dockerfile` hace
    `COPY . /var/www/html`, y la config de Apache de la imagen solo bloqueaba
    archivos `.ht*`, así que `/.env` se servía tal cual.
-2. **El instalador sigue accesible.** `install/` no tiene protección para cuando
+2. **El instalador seguía accesible** (corregido en el repo el 2026-10-23, falta
+   reconstruir en el servidor). `install/` no tiene protección para cuando
    PHPNuxBill ya está instalado (solo `init.php` redirige a `/install` si falta
-   `config.php`, no al revés).
+   `config.php`, no al revés). El propio actualizador de PHPNuxBill
+   (`update.php`) borra `install/`, así que bloquearla no rompe nada.
 3. **FreeRADIUS sigue en el compose** aunque se eligió API. Si se conserva para
    el futuro, tiene dos fallas conocidas:
    - `freeradius/entrypoint.sh` agrega el bloque `client mikrotik` a
